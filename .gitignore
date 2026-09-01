@@ -1,0 +1,42 @@
+﻿# Python virtual environment & cache
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.class
+*.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+google_credentials/*.json
+
+# Temporal local dev data
+.temporal/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
