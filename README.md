@@ -46,51 +46,7 @@ The user interface is designed as an intuitive single-page operations console:
 
 ---
 
-## Environment Variables Configuration
-
-To run the project, create one `.env` file in the **backend** folder and one `.env` file in the **frontend** folder with the following variables:
-
-### How to Get Your Google Gemini API Key:
-1. Go to **[Google AI Studio - API Keys](https://aistudio.google.com/api-keys)**.
-2. Sign in with your Google account.
-3. Click **"Create API key"** (it is free to use).
-4. Copy the generated key and paste it as `GEMINI_API_KEY` in `backend/.env`.
-
 ---
-
-### 1. Backend Environment (`backend/.env`)
-Create a file named `.env` inside the `backend/` directory:
-
-```env
-# Google Gemini API Configuration
-# Get your API key from Google AI Studio: https://aistudio.google.com/api-keys
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.5-flash-lite
-
-# PostgreSQL Database Connection Settings
-DB_USER=postgres
-DB_PASSWORD=your_postgres_password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=ai_supervisor
-DATABASE_URL=postgresql://postgres:your_postgres_password@localhost:5432/ai_supervisor
-
-# Temporal Orchestrator Host (Optional: embedded fail-safe active if offline)
-TEMPORAL_HOST=localhost:7233
-
-# Operational Settings
-ENVIRONMENT=development
-PORT=8000
-```
-
----
-
-### 2. Frontend Environment (`frontend/.env`)
-Create a file named `.env` inside the `frontend/` directory:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-```
 
 ## Setup Instructions (Running on Any System)
 
@@ -135,10 +91,15 @@ cd ai-supervisor
    pip install -r requirements.txt
    ```
 
-4. Create your `.env` file inside the `backend/` folder (get your API key from [Google AI Studio](https://aistudio.google.com/api-keys)):
+4. Configure your environment variables:
+   * **How to get your free Gemini API key**:
+     1. Visit **[Google AI Studio - API Keys](https://aistudio.google.com/api-keys)**.
+     2. Sign in with your Google account and click **"Create API key"**.
+     3. Copy the generated key.
+   * Create a file named `.env` inside the `backend/` folder:
    ```env
-   # backend/.env
-   # Get key from: https://aistudio.google.com/api-keys
+   # Google Gemini API Configuration
+   # Get your key from: https://aistudio.google.com/api-keys
    GEMINI_API_KEY=your_gemini_api_key_here
    GEMINI_MODEL=gemini-3.5-flash-lite
 
