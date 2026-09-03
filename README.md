@@ -97,8 +97,8 @@ Follow these simple, step-by-step instructions to set up and run this project on
 
 ### Step 1: Clone the Repository
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd AI_SUPERVISOR
+git clone https://github.com/TALAVIYAJAY/ai-supervisor.git
+cd ai-supervisor
 ```
 
 ---
