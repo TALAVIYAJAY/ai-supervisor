@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { OrderRun } from '@/types';
+import { formatLocalDateTime } from '@/lib/utils';
 import { Brain, Moon, Clock, User, Package, MapPin, Sparkles } from 'lucide-react';
 
 interface MemoryCardProps {
@@ -10,9 +11,7 @@ interface MemoryCardProps {
 
 export default function MemoryCard({ run }: MemoryCardProps) {
   const formatTime = (isoString?: string | null) => {
-    if (!isoString) return 'Not scheduled';
-    const date = new Date(isoString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatLocalDateTime(isoString);
   };
 
   const getStatusClass = () => {
@@ -46,7 +45,7 @@ export default function MemoryCard({ run }: MemoryCardProps) {
           <span>Active Context State:</span>
         </div>
         <p className="whitespace-pre-wrap font-sans text-slate-300">
-          {run.compact_memory || 'Awaiting initial supervisor analysis...'}
+          {run.compact_memory ? run.compact_memory.replace(/\*\*/g, '').replace(/\*/g, '') : 'Awaiting initial supervisor analysis...'}
         </p>
       </div>
 

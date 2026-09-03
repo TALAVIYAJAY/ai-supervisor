@@ -1,10 +1,10 @@
-﻿import os
+import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.7-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     TEMPORAL_HOST: str = "localhost:7233"
     TEMPORAL_TASK_QUEUE: str = "order-supervisor-tasks"
     

@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Play, Sparkles } from 'lucide-react';
-import { Supervisor } from '@/types';
+import React, { useState, useEffect } from 'react';
+import { X, Sparkles, AlertCircle, ShoppingBag, ShieldCheck, Zap } from 'lucide-react';
+import { Supervisor, OrderRun } from '@/types';
 import { api } from '@/lib/api';
 
 interface NewRunModalProps {
   isOpen: boolean;
   onClose: () => void;
   supervisors: Supervisor[];
-  onCreated: (runId: string) => void;
+  onCreated: (run: OrderRun) => void;
+  onStartCreation?: (orderId: string) => void;
 }
 
 const PRESET_ORDERS = [
   {
     name: 'High-Value Gaming Laptop (High Priority)',
-    order_id: 'ORD-1001',
     items: [{ name: 'ASUS ROG Zephyrus G16 Laptop', price: 1899, qty: 1 }],
     customer_name: 'Jay Talaviya',
     customer_email: 'talaviyajay10@gmail.com',
@@ -25,7 +25,6 @@ const PRESET_ORDERS = [
   },
   {
     name: 'Express Ergonomic Office Chair',
-    order_id: 'ORD-1002',
     items: [{ name: 'Herman Miller Embody Chair', price: 1250, qty: 1 }],
     customer_name: 'Sarah Connor',
     customer_email: 'sarah.c@example.com',
@@ -35,7 +34,6 @@ const PRESET_ORDERS = [
   },
   {
     name: 'VIP Urgent Fragile Glassware',
-    order_id: 'ORD-1003',
     items: [{ name: 'Handcrafted Italian Crystal Decanter Set', price: 650, qty: 1 }],
     customer_name: 'Alexander Wright (VIP)',
     customer_email: 'alex.wright@vipclub.com',
@@ -45,19 +43,33 @@ const PRESET_ORDERS = [
   },
 ];
 
-export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }: NewRunModalProps) {
+export default function NewRunModal({ isOpen, onClose, supervisors, onCreated, onStartCreation }: NewRunModalProps) {
   const [selectedPreset, setSelectedPreset] = useState(0);
-  const [orderId, setOrderId] = useState(PRESET_ORDERS[0].order_id);
+  const [orderId, setOrderId] = useState('ORD-1001');
   const [supervisorId, setSupervisorId] = useState(supervisors[0]?.id || '');
   const [initialInstructions, setInitialInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Auto-generate a unique Order ID every time the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const uniqueNum = Math.floor(1000 + Math.random() * 9000);
+      setOrderId(`ORD-${uniqueNum}`);
+      setError('');
+      setIsSubmitting(false);
+      if (supervisors.length > 0 && !supervisorId) {
+        setSupervisorId(supervisors[0].id);
+      }
+    }
+  }, [isOpen, supervisors, supervisorId]);
+
   if (!isOpen) return null;
 
   const handlePresetSelect = (index: number) => {
     setSelectedPreset(index);
-    setOrderId(PRESET_ORDERS[index].order_id);
+    const uniqueNum = Math.floor(1000 + Math.random() * 9000);
+    setOrderId(`ORD-${uniqueNum}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,20 +77,27 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
     setIsSubmitting(true);
     setError('');
 
+    const preset = PRESET_ORDERS[selectedPreset];
+    const finalOrderId = orderId.trim() || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+    const chosenSupervisorId = supervisorId || supervisors[0]?.id;
+
+    // Immediately close modal and trigger visualization on main page
+    onClose();
+    if (onStartCreation) {
+      onStartCreation(finalOrderId);
+    }
+
     try {
-      const preset = PRESET_ORDERS[selectedPreset];
       const newRun = await api.createOrderRun({
-        order_id: orderId || preset.order_id,
-        supervisor_id: supervisorId || supervisors[0]?.id,
+        order_id: finalOrderId,
+        supervisor_id: chosenSupervisorId,
         order_context: {
           ...preset,
-          order_id: orderId || preset.order_id,
+          order_id: finalOrderId,
         },
-        initial_instructions: initialInstructions || undefined,
       });
 
-      onCreated(newRun.id);
-      onClose();
+      onCreated(newRun);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to start order run';
       setError(msg);
@@ -88,14 +107,17 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-              <Play className="w-4 h-4" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950/50">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+              <Sparkles className="w-5 h-5 text-cyan-400" />
             </div>
-            <h3 className="text-base font-bold text-white">Start New Order Supervisor Run</h3>
+            <div>
+              <h2 className="text-base font-bold text-white">Start New Order Supervisor Run</h2>
+              <p className="text-xs text-slate-400">Launches long-running workflow with autonomous AI oversight</p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -105,19 +127,19 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
-              {error}
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-mono text-slate-400 uppercase mb-2 flex items-center space-x-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Choose Order Scenario Preset</span>
+            <label className="block text-xs font-mono text-slate-400 uppercase mb-2">
+              Select Preset Order Context
             </label>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {PRESET_ORDERS.map((preset, idx) => (
                 <button
                   type="button"
@@ -125,17 +147,16 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
                   onClick={() => handlePresetSelect(idx)}
                   className={`p-3 rounded-xl border text-left transition-all ${
                     selectedPreset === idx
-                      ? 'bg-indigo-600/20 border-indigo-500/60 text-white shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                      ? 'bg-indigo-600/20 border-indigo-500/60 shadow-sm text-white'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">{preset.name}</span>
-                    <span className="text-xs font-mono text-cyan-400">${preset.items[0].price}</span>
+                  <div className="flex items-center space-x-1.5 mb-1 text-cyan-400">
+                    {idx === 0 ? <ShoppingBag className="w-3.5 h-3.5" /> : idx === 1 ? <ShieldCheck className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+                    <span className="text-[10px] font-mono font-bold uppercase">{preset.priority}</span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    Customer: {preset.customer_name} • SLA: {preset.sla_hours}h
-                  </div>
+                  <div className="font-semibold text-xs text-slate-200 line-clamp-1">{preset.items[0].name}</div>
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">${preset.items[0].price} • {preset.sla_hours}h SLA</div>
                 </button>
               ))}
             </div>
@@ -143,7 +164,7 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-mono text-slate-400 uppercase mb-1.5">Order ID</label>
+              <label className="block text-xs font-mono text-slate-400 uppercase mb-1.5">Unique Order ID</label>
               <input
                 type="text"
                 value={orderId}
@@ -160,43 +181,34 @@ export default function NewRunModal({ isOpen, onClose, supervisors, onCreated }:
                 onChange={(e) => setSupervisorId(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500"
               >
-                {supervisors.map((sup) => (
-                  <option key={sup.id} value={sup.id}>
-                    {sup.name} ({sup.wake_up_policy})
-                  </option>
-                ))}
+                {supervisors.length > 0 ? (
+                  supervisors.map((sup) => (
+                    <option key={sup.id} value={sup.id}>
+                      {sup.name} ({sup.wake_up_policy})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Standard E-commerce Supervisor (balanced)</option>
+                )}
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-mono text-slate-400 uppercase mb-1.5">
-              Optional Initial Guidance / Instructions
-            </label>
-            <textarea
-              rows={2}
-              value={initialInstructions}
-              onChange={(e) => setInitialInstructions(e.target.value)}
-              placeholder="e.g. For this order, prioritize speed over cost."
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
-            />
-          </div>
-
-          <div className="pt-2 flex items-center justify-end space-x-3 border-t border-slate-800">
+          <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-sm font-bold shadow-lg shadow-indigo-500/25 transition-all flex items-center space-x-2 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-2 transition-all disabled:opacity-50"
             >
-              <Play className="w-4 h-4 fill-current" />
-              <span>{isSubmitting ? 'Starting Workflow...' : 'Launch Supervisor'}</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? 'Starting Run...' : 'Start Supervisor Run'}</span>
             </button>
           </div>
         </form>

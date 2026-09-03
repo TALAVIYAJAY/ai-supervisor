@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { PauseCircle, PlayCircle, XCircle, BellRing, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { OrderRun } from '@/types';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 interface WorkflowControlsProps {
   run: OrderRun;
@@ -12,15 +12,28 @@ interface WorkflowControlsProps {
 
 export default function WorkflowControls({ run, onControlTriggered }: WorkflowControlsProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const handleAction = async (action: 'pause' | 'resume' | 'terminate' | 'wake', reason?: string) => {
     setLoadingAction(action);
+    setFeedback(null);
     try {
+      if (action === 'wake') {
+        setFeedback('⚡ Force wake triggered! AI supervisor is now awake and evaluating order...');
+      } else if (action === 'pause') {
+        setFeedback('⏸️ Workflow paused by operator.');
+      } else if (action === 'resume') {
+        setFeedback('▶️ Workflow resumed.');
+      } else if (action === 'terminate') {
+        setFeedback('🛑 Workflow terminated by operator.');
+      }
+
       await api.controlWorkflow(run.id, action, reason);
       onControlTriggered();
+      setTimeout(() => setFeedback(null), 4000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error';
-      alert(`Control failed: ${msg}`);
+      const msg = getErrorMessage(err, 'Control action failed');
+      setFeedback(msg);
     } finally {
       setLoadingAction(null);
     }
@@ -39,6 +52,12 @@ export default function WorkflowControls({ run, onControlTriggered }: WorkflowCo
           <p className="text-[11px] text-slate-400">Direct Temporal workflow lifecycle commands</p>
         </div>
       </div>
+
+      {feedback && (
+        <div className="p-2.5 rounded-xl bg-indigo-950/70 border border-cyan-500/40 text-cyan-300 text-xs font-mono animate-in fade-in flex items-center space-x-2">
+          <span>{feedback}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {run.status === 'PAUSED' ? (

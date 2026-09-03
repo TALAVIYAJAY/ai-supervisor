@@ -1,8 +1,7 @@
-﻿import uuid
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlmodel import SQLModel, Field, Column, JSON
-from .config import settings
 
 class Supervisor(SQLModel, table=True):
     __tablename__ = "supervisors"
@@ -13,10 +12,9 @@ class Supervisor(SQLModel, table=True):
     base_instruction: str = Field(default="")
     available_tools: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     wake_up_policy: str = Field(default="balanced")
-    model_name: str = Field(default_factory=lambda: settings.GEMINI_MODEL)
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 class OrderRun(SQLModel, table=True):
@@ -36,8 +34,8 @@ class OrderRun(SQLModel, table=True):
     
     final_summary: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 class ActivityLog(SQLModel, table=True):
@@ -52,4 +50,4 @@ class ActivityLog(SQLModel, table=True):
     details: Optional[str] = Field(default=None)
     metadata_payload: Optional[Dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
     
-    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+    timestamp: datetime = Field(default_factory=datetime.now, index=True)

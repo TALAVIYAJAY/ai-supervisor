@@ -17,7 +17,6 @@ export default function TemplatesPage() {
   const [description, setDescription] = useState('');
   const [baseInstruction, setBaseInstruction] = useState('');
   const [wakeUpPolicy, setWakeUpPolicy] = useState<'aggressive' | 'balanced' | 'conservative'>('balanced');
-  const [modelName, setModelName] = useState('gemini-3.7-flash');
 
   const selectTemplate = (sup: Supervisor) => {
     setIsCreating(false);
@@ -26,7 +25,6 @@ export default function TemplatesPage() {
     setDescription(sup.description || '');
     setBaseInstruction(sup.base_instruction);
     setWakeUpPolicy(sup.wake_up_policy);
-    setModelName(sup.model_name || 'gemini-3.7-flash');
     setSaveSuccess(false);
   };
 
@@ -59,7 +57,6 @@ export default function TemplatesPage() {
     setDescription('Tailored operational supervisor for custom SLA requirements.');
     setBaseInstruction('You are an autonomous Order Operations Supervisor. Analyze incoming exceptions and inquiries.');
     setWakeUpPolicy('balanced');
-    setModelName('gemini-3.7-flash');
     setSaveSuccess(false);
   };
 
@@ -75,7 +72,6 @@ export default function TemplatesPage() {
           description,
           base_instruction: baseInstruction,
           wake_up_policy: wakeUpPolicy,
-          model_name: modelName,
         });
         const allSups = await api.getSupervisors();
         setSupervisors(allSups);
@@ -86,7 +82,6 @@ export default function TemplatesPage() {
           description,
           base_instruction: baseInstruction,
           wake_up_policy: wakeUpPolicy,
-          model_name: modelName,
         });
         const allSups = await api.getSupervisors();
         setSupervisors(allSups);
@@ -117,7 +112,7 @@ export default function TemplatesPage() {
               <span>Supervisor Template Configuration</span>
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Configure system prompts, Tier-1 classifier wake-up sensitivity, and LLM orchestration settings
+              Configure system prompts, Tier-1 classifier wake-up sensitivity, and autonomous supervisor policies
             </p>
           </div>
         </div>
@@ -177,31 +172,15 @@ export default function TemplatesPage() {
           </div>
 
           <form onSubmit={handleSave} className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">Template Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">Model Engine</label>
-                <select
-                  value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="gemini-3.7-flash">Google Gemini 3.7 Flash (Default / Recommended)</option>
-                  <option value="gemini-2.5-flash">Google Gemini 2.5 Flash</option>
-                  <option value="gemini-2.0-flash">Google Gemini 2.0 Flash</option>
-                  <option value="gemini-1.5-flash">Google Gemini 1.5 Flash</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-mono uppercase text-slate-400 mb-1.5">Template Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500"
+                required
+              />
             </div>
 
             <div>

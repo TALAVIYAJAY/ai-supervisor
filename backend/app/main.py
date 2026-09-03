@@ -22,7 +22,6 @@ def seed_default_supervisors():
                 name="Standard E-commerce Supervisor",
                 description="Balanced supervisor for standard retail orders. Prioritizes customer notification and prompt logistics escalations.",
                 wake_up_policy="balanced",
-                model_name=settings.GEMINI_MODEL,
                 available_tools=[
                     "message_fulfillment_team",
                     "message_payments_team",
@@ -46,7 +45,6 @@ When delays or exceptions happen:
                 name="VIP Priority Expeditor",
                 description="High-touch aggressive supervisor for premium customers. Zero-tolerance for delays, instant escalation.",
                 wake_up_policy="aggressive",
-                model_name=settings.GEMINI_MODEL,
                 available_tools=[
                     "message_fulfillment_team",
                     "message_payments_team",
@@ -89,6 +87,10 @@ async def start_embedded_temporal_worker():
 
         logger.info(f"Connecting embedded Temporal Worker to {settings.TEMPORAL_HOST}...")
         client = await get_temporal_client()
+        if not client:
+            logger.info(f"Temporal server at {settings.TEMPORAL_HOST} not detected. Direct Autonomous State Machine engine is ACTIVE.")
+            return
+
         worker = Worker(
             client,
             task_queue=settings.TEMPORAL_TASK_QUEUE,
@@ -108,6 +110,45 @@ async def start_embedded_temporal_worker():
     except Exception as e:
         logger.warning(f"Embedded Temporal Worker offline (Temporal Server at {settings.TEMPORAL_HOST} not reachable): {e}")
 
+async def scheduled_wake_up_ticker():
+    """
+    Background Autonomous Ticker:
+    Checks every 10 seconds for sleeping runs whose next_wake_time has passed
+    (e.g., overnight while server was off, or when a timer countdown finishes),
+    and automatically triggers their periodic review!
+    """
+    from datetime import datetime, timezone
+    from sqlmodel import Session, select
+    from .db import engine
+    from .models import OrderRun
+    from .workflows import execute_direct_scheduled_wakeup
+
+    logger.info("⏰ Autonomous Scheduled Wake-Up Ticker active.")
+    # Run an initial check after 2 seconds
+    await asyncio.sleep(2)
+    while True:
+        try:
+            now = datetime.now()
+            with Session(engine) as session:
+                overdue_runs = session.exec(
+                    select(OrderRun).where(
+                        OrderRun.status == "SLEEPING",
+                        OrderRun.next_wake_time != None,
+                        OrderRun.next_wake_time <= now
+                    )
+                ).all()
+
+                for r in overdue_runs:
+                    logger.info(f"⏰ Auto-waking overdue run {r.id} (Order {r.order_id})...")
+                    asyncio.create_task(execute_direct_scheduled_wakeup(r.id))
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Error in wake-up ticker: {e}")
+
+        await asyncio.sleep(10)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing Order Supervisor Backend...")
@@ -117,13 +158,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database initialization: {e}")
 
-    # Launch embedded Temporal Worker in background task
+    # Launch embedded Temporal Worker & Scheduled Wake-Up Ticker in background
     worker_task = asyncio.create_task(start_embedded_temporal_worker())
+    ticker_task = asyncio.create_task(scheduled_wake_up_ticker())
     
     yield
     
     logger.info("Shutting down Order Supervisor Backend...")
     worker_task.cancel()
+    ticker_task.cancel()
     await asyncio.sleep(0.5)
 
 app = FastAPI(

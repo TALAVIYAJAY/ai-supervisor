@@ -32,7 +32,7 @@ export default function Navbar() {
               <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
                 Order Supervisor
               </span>
-              <span className="block text-xs text-cyan-400 font-mono">Temporal + Gemini POC</span>
+              <span className="block text-xs text-cyan-400 font-mono">Autonomous AI Operations</span>
             </div>
           </Link>
 

@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import uvicorn
 
@@ -17,6 +17,7 @@ Order Supervisor Management CLI
 Available commands:
   python manage.py migrate          - Create/update all tables in PostgreSQL database
   python manage.py makemigrations   - Verify model definitions
+  python manage.py test             - Run automated test suite covering all scenarios
   python manage.py runserver        - Run FastAPI server with auto-reload (port 8000)
   python manage.py runworker        - Run Temporal background worker
 """)
@@ -33,9 +34,9 @@ def main():
         try:
             create_db_and_tables()
             print("Applying migrations for models in app/models.py:")
-            print("  ✓ supervisors (Table: supervisors)")
-            print("  ✓ order_runs (Table: order_runs)")
-            print("  ✓ activity_logs (Table: activity_logs)")
+            print("  [OK] supervisors (Table: supervisors)")
+            print("  [OK] order_runs (Table: order_runs)")
+            print("  [OK] activity_logs (Table: activity_logs)")
             seed_default_supervisors()
             print("Migration complete! Database tables successfully created in PostgreSQL.")
         except Exception as e:
@@ -44,11 +45,21 @@ def main():
             
     elif command in ["makemigrations"]:
         print("Checking model definitions in app/models.py...")
-        print("  ✓ Supervisor model verified")
-        print("  ✓ OrderRun model verified")
-        print("  ✓ ActivityLog model verified")
+        print("  [OK] Supervisor model verified")
+        print("  [OK] OrderRun model verified")
+        print("  [OK] ActivityLog model verified")
         print("No pending schema drift. Ready to run 'python manage.py migrate'.")
         
+    elif command in ["test"]:
+        print("Running comprehensive test suite for Order Supervisor POC...")
+        import unittest
+        loader = unittest.TestLoader()
+        suite = loader.discover(os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests"))
+        runner = unittest.TextTestRunner(verbosity=2)
+        result = runner.run(suite)
+        if not result.wasSuccessful():
+            sys.exit(1)
+            
     elif command in ["runserver"]:
         port = int(os.getenv("PORT", 8000))
         print(f"Starting FastAPI server on http://localhost:{port}...")

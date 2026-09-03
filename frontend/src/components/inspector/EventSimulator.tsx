@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { Zap, Truck, CreditCard, MessageSquare, Clock, RotateCcw, CheckCircle, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 interface EventSimulatorProps {
   runId: string;
+  status?: string;
   onEventSent: () => void;
 }
 
@@ -60,7 +61,7 @@ const PRESET_EVENTS = [
   },
 ];
 
-export default function EventSimulator({ runId, onEventSent }: EventSimulatorProps) {
+export default function EventSimulator({ runId, status, onEventSent }: EventSimulatorProps) {
   const [sendingEvent, setSendingEvent] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
@@ -73,8 +74,8 @@ export default function EventSimulator({ runId, onEventSent }: EventSimulatorPro
       setStatusMsg(`Dispatched '${event.label}' signal into workflow!`);
       onEventSent();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send event';
-      setStatusMsg(`Error: ${msg}`);
+      const msg = getErrorMessage(err, 'Failed to send event');
+      setStatusMsg(msg);
     } finally {
       setSendingEvent(null);
     }
@@ -95,8 +96,17 @@ export default function EventSimulator({ runId, onEventSent }: EventSimulatorPro
       </div>
 
       {statusMsg && (
-        <div className="p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-500/40 text-cyan-300 text-xs font-mono animate-in fade-in">
+        <div className={`p-2.5 rounded-lg text-xs font-mono animate-in fade-in border ${
+          statusMsg.includes('Dispatched')
+            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+            : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+        }`}>
           {statusMsg}
+        </div>
+      )}
+      {status === 'PAUSED' && (
+        <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center space-x-2">
+          <span>Workflow is currently PAUSED. Click Resume in lifecycle controls above before injecting events.</span>
         </div>
       )}
 
@@ -109,7 +119,7 @@ export default function EventSimulator({ runId, onEventSent }: EventSimulatorPro
             <button
               key={event.type}
               onClick={() => handleInject(event)}
-              disabled={sendingEvent !== null}
+              disabled={sendingEvent !== null || status === "PAUSED" || status === "COMPLETED" || status === "TERMINATED"}
               className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 disabled:opacity-50 ${event.color}`}
             >
               <div className="p-1.5 rounded-lg bg-slate-950/60 shrink-0 mt-0.5">

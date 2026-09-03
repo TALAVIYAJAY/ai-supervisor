@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { ActivityLog } from '@/types';
+import { formatLocalTime } from '@/lib/utils';
 import { Zap, Cpu, Brain, Wrench, MessageSquare, Sliders, CheckCircle2, Clock, Truck, CreditCard } from 'lucide-react';
 
 interface TimelineFeedProps {
@@ -59,8 +60,7 @@ export default function TimelineFeed({ logs }: TimelineFeedProps) {
   };
 
   const formatTimestamp = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatLocalTime(iso);
   };
 
   return (
@@ -95,7 +95,7 @@ export default function TimelineFeed({ logs }: TimelineFeedProps) {
                   <div className="flex items-start justify-between gap-3 mb-1.5">
                     <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                       {getLogBadge(log)}
-                      <span className="text-sm font-bold text-white">{log.title}</span>
+                      <span className="text-sm font-bold text-white">{log.title ? log.title.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</span>
                     </div>
                     <span className="text-xs font-mono text-slate-500 whitespace-nowrap">
                       {formatTimestamp(log.timestamp)}
@@ -104,7 +104,7 @@ export default function TimelineFeed({ logs }: TimelineFeedProps) {
 
                   {log.details && (
                     <p className="text-xs text-slate-300 leading-relaxed font-sans mt-2 whitespace-pre-wrap bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/50">
-                      {log.details}
+                      {log.details ? log.details.replace(/\*\*/g, '').replace(/\*/g, '') : ''}
                     </p>
                   )}
 
@@ -124,7 +124,7 @@ export default function TimelineFeed({ logs }: TimelineFeedProps) {
                             </span>
                             <span className="text-[11px] text-emerald-400 font-mono">[{action.status}]</span>
                           </div>
-                          <p className="text-slate-300 text-xs mt-0.5">{action.details}</p>
+                          <p className="text-slate-300 text-xs mt-0.5">{action.details ? action.details.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</p>
                         </div>
                       ))}
                     </div>

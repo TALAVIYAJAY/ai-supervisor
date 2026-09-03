@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { MessageSquarePlus, Send, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 interface InstructionInjectorProps {
   runId: string;
@@ -27,8 +27,8 @@ export default function InstructionInjector({ runId, onInstructionSent }: Instru
       setInstruction('');
       onInstructionSent();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to inject instruction';
-      setFeedback(`Error: ${msg}`);
+      const msg = getErrorMessage(err, 'Failed to inject instruction');
+      setFeedback(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -52,21 +52,44 @@ export default function InstructionInjector({ runId, onInstructionSent }: Instru
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-1.5 pb-1">
+          <span className="text-[11px] font-mono text-slate-400">Quick Directives:</span>
+          {[
+            { label: '🛑 Cancel this order', text: 'Cancel this order immediately and notify customer.' },
+            { label: '⚡ Prioritize speed over cost', text: 'Prioritize speed over cost. Authorize express delivery.' },
+            { label: '📦 Hold shipment', text: 'Place order on hold. Do not dispatch until further notice.' },
+          ].map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              onClick={() => setInstruction(chip.text)}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium border border-slate-700 transition-colors"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
         <div className="relative">
           <textarea
             rows={2}
+            maxLength={300}
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            placeholder="e.g. For this order, prioritize speed over cost. If delayed further, authorize free priority shipping."
+            placeholder="e.g. Cancel this order immediately, or prioritize speed over cost..."
             className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
           />
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[10px] font-mono text-slate-500">
+            Allowed: Cancellation, hold, speed priority, customer updates ({instruction.length}/300)
+          </span>
+
           <button
             type="submit"
-            disabled={isSubmitting || !instruction.trim()}
+            disabled={isSubmitting || instruction.trim().length < 5}
             className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50 shadow-md shadow-cyan-500/20"
           >
             {isSubmitting ? (

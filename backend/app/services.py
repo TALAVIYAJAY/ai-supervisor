@@ -1,9 +1,38 @@
+import re
 import json
 import logging
 from typing import Dict, Any, List
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+def clean_plain_text(val: Any) -> Any:
+    """Removes markdown syntax like **, *, __, `#`, etc. ensuring clean, professional text."""
+    if isinstance(val, str):
+        text = re.sub(r"\*\*([^*]+)\*\*", r"\1", val)
+        text = re.sub(r"\*([^*]+)\*", r"\1", text)
+        text = re.sub(r"__([^_]+)__", r"\1", text)
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+        text = re.sub(r"#+\s*", "", text)
+        text = text.replace("**", "").replace("*", "")
+        return re.sub(r"\s+", " ", text).strip()
+    elif isinstance(val, list):
+        return [clean_plain_text(item) for item in val]
+    elif isinstance(val, dict):
+        return {k: clean_plain_text(v) for k, v in val.items()}
+    return val
+
+def safe_extract_json(raw_text: str) -> Any:
+    """Extracts JSON from response text even if wrapped in markdown codeblocks."""
+    text = raw_text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    return json.loads(text.strip())
+
 
 # -------------------------------------------------------------
 # 1. TOOL DEFINITIONS & SIMULATED EXECUTIONS
@@ -211,7 +240,7 @@ Respond with JSON:
 {{
   "decision": "WAKE_NOW" or "REMAIN_ASLEEP",
   "urgency": "LOW", "MEDIUM", "HIGH", or "CRITICAL",
-  "reasoning": "1-2 sentence explanation"
+  "reasoning": "1-2 sentence explanation (PLAIN TEXT ONLY, NO ASTERISKS ** OR MARKDOWN)"
 }}
 """
     if settings.GEMINI_API_KEY:
@@ -220,16 +249,23 @@ Respond with JSON:
             from google.genai import types
             
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            model_name = settings.GEMINI_MODEL or "gemini-3.7-flash"
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1
-                )
-            )
-            parsed = json.loads(response.text)
+            models_to_try = [settings.GEMINI_MODEL or "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.5-flash"]
+            response = None
+            for model_name in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.1
+                        )
+                    )
+                    if response:
+                        break
+                except Exception as ex:
+                    logger.warning(f"Model {model_name} unavailable ({ex}), trying fallback...")
+            parsed = clean_plain_text(safe_extract_json(response.text)) if response and response.text else {}
             return {
                 "decision": parsed.get("decision", "WAKE_NOW"),
                 "urgency": parsed.get("urgency", "MEDIUM"),
@@ -263,36 +299,66 @@ def run_agent_reasoning_step(
     trigger_event: Dict[str, Any],
     trigger_source: str = "SIGNAL"
 ) -> Dict[str, Any]:
-    """Tier-2 Main Supervisor Agent reasoning step with multi-turn tool calling."""
-    system_instruction = f"""{base_instruction}
+    """
+    Tier-2 Main Supervisor Agent reasoning step.
+    Uses Google Gemini structured JSON mode matching autograde_service.py pattern.
+    Executes in a single high-speed inference call, eliminating AFC loops and multi-turn timeouts.
+    """
+    tools_summary = """
+AVAILABLE TOOLS:
+1. message_customer(channel, subject, message) - Inform/reassure customer regarding order status or delays.
+2. message_logistics_team(carrier, issue_type, inquiry_details) - Contact carrier to expedite or reroute shipment.
+3. message_fulfillment_team(urgency, message, action_required) - Tell warehouse to hold, inspect, or expedite package.
+4. message_payments_team(reason, amount, action) - Alert finance regarding payment failure, refund, or investigation.
+5. create_internal_note(note_type, content) - Log internal audit note or risk flag.
+6. update_memory_summary(new_summary) - Keep rolling context compact and updated.
+7. schedule_next_wake_up(duration_minutes, wake_up_reason) - Set sleep duration (e.g. 15, 30, 60 mins).
+8. close_workflow(outcome, summary) - Conclude workflow upon terminal delivery or cancellation.
+"""
+
+    prompt = f"""{base_instruction}
 
 ORDER ID: {order_id}
 ORDER CONTEXT:
 {json.dumps(order_context, indent=2, default=str)}
 
-RUNTIME OPERATOR INSTRUCTIONS:
+RUNTIME OPERATOR DIRECTIVES:
 {json.dumps(runtime_instructions, indent=2) if runtime_instructions else "None"}
 
-COMPACT MEMORY SUMMARY:
+CURRENT COMPACT MEMORY SUMMARY:
 {compact_memory}
 
-TRIGGER FOR THIS STEP:
+TRIGGER EVENT:
 Source: {trigger_source}
 Details: {json.dumps(trigger_event, indent=2, default=str)}
 
+{tools_summary}
+
 YOUR TASK:
-1. Analyze the triggering event and current situation.
-2. Call appropriate business tools (message customer, fulfillment, logistics, internal note) if action is required.
-3. Always update the compact memory summary using 'update_memory_summary'.
-4. If order is NOT complete, call 'schedule_next_wake_up'.
-5. If order is delivered or terminal, call 'close_workflow'.
+1. Analyze the triggering event and current situation for order {order_id}.
+2. If this is an operator cancellation directive, mark is_terminal=true, call 'close_workflow' with outcome='CANCELLED_BY_OPERATOR', and alert customer/warehouse.
+3. If this is a shipment delay or issue, call 'message_logistics_team' and 'message_customer', and flag is_escalated=true.
+4. Always provide an updated 2-3 sentence 'new_compact_memory' summarizing latest progress.
+5. Set 'sleep_minutes' (default 30) for when to check order next.
+6. Return a valid JSON object ONLY. Do NOT include any markdown formatting or asterisks.
+
+REQUIRED JSON OUTPUT SCHEMA:
+{{
+  "thoughts": "1-2 sentence plain text reasoning (NO ASTERISKS **)",
+  "tool_actions": [
+    {{"action": "tool_name", "args": {{"param_key": "param_value"}}}}
+  ],
+  "new_compact_memory": "Updated 2-3 sentence rolling memory summary (clean plain text)",
+  "sleep_minutes": 30,
+  "is_terminal": false,
+  "is_escalated": false
+}}
 """
 
     tool_actions_taken = []
     thoughts = ""
     new_compact_memory = compact_memory
     sleep_minutes = 30
-    wake_up_reason = "Periodic supervisor review"
     is_terminal = False
     terminal_outcome = None
     is_escalated = False
@@ -301,132 +367,101 @@ YOUR TASK:
         try:
             from google import genai
             from google.genai import types
-            
+
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            model_name = settings.GEMINI_MODEL or "gemini-3.7-flash"
-            gemini_tools = []
-            for t in TOOL_DEFINITIONS:
-                gemini_tools.append(types.Tool(function_declarations=[
-                    types.FunctionDeclaration(
-                        name=t["name"],
-                        description=t["description"],
-                        parameters=types.Schema(
-                            type=t["parameters"]["type"],
-                            properties={
-                                k: types.Schema(type=v["type"], description=v.get("description", ""))
-                                for k, v in t["parameters"]["properties"].items()
-                            },
-                            required=t["parameters"].get("required", [])
+            models_to_try = [settings.GEMINI_MODEL or "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.5-flash"]
+            
+            parsed = None
+            for m in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.1
                         )
                     )
-                ]))
-            
-            chat = client.chats.create(
-                model=model_name,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.2,
-                    tools=gemini_tools
-                )
-            )
-            
-            response = chat.send_message(f"Evaluate situation for order {order_id}. Take necessary tool actions and update memory summary.")
-            
-            iterations = 0
-            while iterations < 5:
-                iterations += 1
-                if response.text:
-                    thoughts += response.text + "\n"
-                    
-                function_calls = []
-                for candidate in response.candidates:
-                    for part in candidate.content.parts:
-                        if part.function_call:
-                            function_calls.append(part.function_call)
-                            
-                if not function_calls:
-                    break
-                    
-                tool_responses = []
-                for call in function_calls:
-                    tool_name = call.name
-                    args = dict(call.args) if call.args else {}
-                    exec_result = execute_tool(tool_name, args)
-                    tool_actions_taken.append(exec_result)
-                    
-                    if tool_name == "update_memory_summary":
-                        new_compact_memory = args.get("new_summary", new_compact_memory)
-                    elif tool_name == "schedule_next_wake_up":
-                        sleep_minutes = args.get("duration_minutes", 30)
-                        wake_up_reason = args.get("wake_up_reason", wake_up_reason)
-                    elif tool_name == "close_workflow":
-                        is_terminal = True
-                        terminal_outcome = args.get("outcome", "COMPLETED")
-                    elif tool_name == "escalate_issue":
-                        is_escalated = True
-                        
-                    tool_responses.append(types.Part.from_function_response(
-                        name=tool_name,
-                        response={"result": exec_result}
-                    ))
-                    
-                response = chat.send_message(tool_responses)
-                
+                    if response and response.text:
+                        parsed = safe_extract_json(response.text)
+                        if parsed and isinstance(parsed, dict):
+                            break
+                except Exception as ex:
+                    logger.warning(f"Model {m} failed ({ex}), trying next model...")
+
+            if parsed and isinstance(parsed, dict):
+                thoughts = clean_plain_text(parsed.get("thoughts", f"Evaluated trigger {trigger_source}."))
+                new_compact_memory = clean_plain_text(parsed.get("new_compact_memory", compact_memory))
+                sleep_minutes = int(parsed.get("sleep_minutes", 30))
+                is_terminal = bool(parsed.get("is_terminal", False))
+                is_escalated = bool(parsed.get("is_escalated", False))
+
+                # Execute all recommended tools
+                for item in parsed.get("tool_actions", []):
+                    action_name = item.get("action")
+                    action_args = item.get("args", {})
+                    if action_name in [t["name"] for t in TOOL_DEFINITIONS]:
+                        exec_res = execute_tool(action_name, action_args)
+                        tool_actions_taken.append(exec_res)
+                        if action_name == "close_workflow":
+                            is_terminal = True
+                            terminal_outcome = action_args.get("outcome", "COMPLETED")
+                        elif action_name == "escalate_issue":
+                            is_escalated = True
+
         except Exception as e:
-            logger.error(f"Gemini agent inference error: {e}")
+            logger.error(f"Gemini structured JSON reasoning error: {e}")
             thoughts = f"Agent evaluated trigger '{trigger_event.get('event_type', trigger_source)}'."
 
-    # Fallback tool actions
+    # Deterministic resilient fallback if tools were not called
     if not tool_actions_taken:
         event_type = trigger_event.get("event_type", trigger_source)
         if event_type == "shipment_delayed":
             tool_actions_taken.append(execute_tool("message_customer", {
                 "channel": "email",
-                "message_body": f"Dear Customer, your order #{order_id} is experiencing a brief carrier delay. We are actively expediting delivery.",
-                "sentiment_tone": "apologetic"
+                "message": f"Dear Customer, your order #{order_id} is experiencing a brief carrier delay. We are actively expediting delivery with the carrier."
             }))
             tool_actions_taken.append(execute_tool("message_logistics_team", {
                 "carrier": trigger_event.get("payload", {}).get("carrier", "FedEx"),
                 "issue_type": "DELAY",
                 "inquiry_details": "Requesting priority routing for delayed parcel."
             }))
-            new_compact_memory = f"Shipment delayed for #{order_id}. Customer notified via email and logistics escalated. Awaiting carrier update."
-            sleep_minutes = 60
-        elif event_type == "payment_failed":
-            tool_actions_taken.append(execute_tool("message_payments_team", {
-                "reason": "Payment transaction failed at gateway.",
-                "amount": order_context.get("items", [{}])[0].get("price", 100.0),
-                "action": "retry"
-            }))
+            new_compact_memory = f"Shipment delayed for #{order_id}. Customer notified and logistics escalated. Awaiting carrier update."
+            is_escalated = True
+        elif event_type in ["payment_failed"]:
             tool_actions_taken.append(execute_tool("message_customer", {
                 "channel": "email",
-                "message_body": f"We encountered an issue processing payment for order #{order_id}. Please update your payment method.",
-                "sentiment_tone": "urgent"
+                "message": f"Payment verification pending for #{order_id}. Please update payment method to avoid dispatch hold."
             }))
-            new_compact_memory = f"Payment failure detected for order #{order_id}. Payments team alerted and customer notified."
-            sleep_minutes = 30
-        elif event_type in ["delivered", "order_delivered"]:
-            tool_actions_taken.append(execute_tool("close_workflow", {
-                "reason": "Order delivery confirmed by carrier.",
-                "outcome": "SUCCESSFUL_DELIVERY"
-            }))
-            is_terminal = True
-            terminal_outcome = "SUCCESSFUL_DELIVERY"
-            new_compact_memory = f"Order #{order_id} has been successfully delivered and verified."
-        else:
-            tool_actions_taken.append(execute_tool("create_internal_note", {
-                "note_type": "observation",
-                "content": f"Order #{order_id} reviewed on trigger '{event_type}'. All parameters normal."
-            }))
-            new_compact_memory = f"Order #{order_id} assessed on {event_type}. Monitoring lifecycle status."
-            sleep_minutes = 45
+            new_compact_memory = f"Payment verification pending for #{order_id}. Customer notified to retry payment."
+            is_escalated = True
+        elif event_type == "operator_guidance":
+            guidance = trigger_event.get("payload", {}).get("guidance", "")
+            if any(w in guidance.lower() for w in ["cancel", "abort", "refund"]):
+                tool_actions_taken.append(execute_tool("close_workflow", {
+                    "outcome": "CANCELLED_BY_OPERATOR",
+                    "summary": f"Order cancelled per operator directive: {guidance}"
+                }))
+                tool_actions_taken.append(execute_tool("message_customer", {
+                    "channel": "email",
+                    "message": f"Your order #{order_id} has been cancelled per request. A refund has been processed."
+                }))
+                new_compact_memory = f"Order #{order_id} cancelled by operator directive. Refund initiated."
+                is_terminal = True
+            else:
+                tool_actions_taken.append(execute_tool("message_logistics_team", {
+                    "carrier": "FedEx",
+                    "issue_type": "PRIORITY_UPGRADE",
+                    "inquiry_details": f"Operator directive: {guidance}"
+                }))
+                new_compact_memory = f"Operator directive applied: {guidance}. Logistics notified to expedite."
 
     return {
-        "thoughts": thoughts.strip(),
+        "thoughts": clean_plain_text(thoughts),
         "tool_actions": tool_actions_taken,
-        "compact_memory": new_compact_memory,
+        "compact_memory": clean_plain_text(new_compact_memory),
         "sleep_minutes": sleep_minutes,
-        "wake_up_reason": wake_up_reason,
+        "wake_up_reason": "Periodic review",
         "is_terminal": is_terminal,
         "terminal_outcome": terminal_outcome,
         "is_escalated": is_escalated
@@ -463,16 +498,21 @@ Generate a JSON object with:
             from google.genai import types
             
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            model_name = settings.GEMINI_MODEL or "gemini-3.7-flash"
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2
-                )
-            )
-            return json.loads(response.text)
+            models_to_try = [settings.GEMINI_MODEL or "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.5-flash"]
+            for m in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.2
+                        )
+                    )
+                    if response:
+                        return clean_plain_text(safe_extract_json(response.text))
+                except Exception as ex:
+                    logger.warning(f"Final learnings model {m} failed ({ex}), trying fallback...")
         except Exception as e:
             logger.warning(f"Gemini final summary error: {e}")
             

@@ -5,7 +5,6 @@ export interface Supervisor {
   base_instruction: string;
   available_tools: string[];
   wake_up_policy: 'aggressive' | 'balanced' | 'conservative';
-  model_name: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

@@ -1,17 +1,19 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { OrderRun } from '@/types';
+import { formatLocalDateTime } from '@/lib/utils';
 import { Clock, Eye, Moon, AlertTriangle, CheckCircle, Flame, PauseCircle, XCircle } from 'lucide-react';
 
 interface RunListProps {
   runs: OrderRun[];
   selectedFilter: string;
   onFilterChange: (status: string) => void;
+  selectedRunId?: string | null;
+  onSelectRun?: (runId: string) => void;
 }
 
-export default function RunList({ runs, selectedFilter, onFilterChange }: RunListProps) {
+export default function RunList({ runs, selectedFilter, onFilterChange, selectedRunId, onSelectRun }: RunListProps) {
   const filters = ['ALL', 'ACTIVE', 'SLEEPING', 'ESCALATED', 'COMPLETED', 'TERMINATED'];
 
   const getStatusBadge = (status: OrderRun['status']) => {
@@ -64,9 +66,7 @@ export default function RunList({ runs, selectedFilter, onFilterChange }: RunLis
   };
 
   const formatTime = (isoString?: string | null) => {
-    if (!isoString) return 'None';
-    const date = new Date(isoString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatLocalDateTime(isoString);
   };
 
   return (
@@ -74,7 +74,7 @@ export default function RunList({ runs, selectedFilter, onFilterChange }: RunLis
       <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-white">Live Order Supervisors</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Temporal long-running workflow state machine runs</p>
+          <p className="text-xs text-slate-400 mt-0.5">Click any order row to view live inspector and controls below</p>
         </div>
 
         <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto">
@@ -101,26 +101,31 @@ export default function RunList({ runs, selectedFilter, onFilterChange }: RunLis
               <th className="py-3.5 px-5">Order ID</th>
               <th className="py-3.5 px-5">Status</th>
               <th className="py-3.5 px-5">Customer & Item</th>
-              <th className="py-3.5 px-5">Next Wake-up</th>
-              <th className="py-3.5 px-5">Rolling Memory Summary</th>
+              <th className="py-3.5 px-5">Next Wake-Up</th>
               <th className="py-3.5 px-5 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60 font-sans">
+          <tbody className="divide-y divide-slate-800/60">
             {runs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
+                <td colSpan={5} className="py-12 text-center text-slate-500 text-sm">
                   No order supervisor runs found for this filter. Start a new order above!
                 </td>
               </tr>
             ) : (
               runs.map((run) => (
-                <tr key={run.id} className="hover:bg-slate-800/40 transition-colors group">
-                  <td className="py-4 px-5 font-mono font-bold text-white">
-                    <Link href={`/runs/${run.id}`} className="hover:text-cyan-400 transition-colors flex items-center space-x-2">
-                      <span>{run.order_id}</span>
-                    </Link>
-                    <span className="block text-[11px] text-slate-500 font-mono font-normal mt-0.5">{run.id}</span>
+                <tr
+                  key={run.id}
+                  onClick={() => onSelectRun && onSelectRun(run.id)}
+                  className={`cursor-pointer transition-colors ${
+                    selectedRunId === run.id
+                      ? 'bg-indigo-950/40 hover:bg-indigo-950/60 border-l-4 border-indigo-500'
+                      : 'hover:bg-slate-800/40'
+                  }`}
+                >
+                  <td className="py-4 px-5 font-mono">
+                    <span className="font-bold text-white block">{run.order_id}</span>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">{run.id}</span>
                   </td>
 
                   <td className="py-4 px-5">
@@ -138,7 +143,7 @@ export default function RunList({ runs, selectedFilter, onFilterChange }: RunLis
 
                   <td className="py-4 px-5 font-mono text-xs">
                     {run.status === 'SLEEPING' && run.next_wake_time ? (
-                      <div className="flex items-center text-amber-400 space-x-1.5">
+                      <div className="flex items-center text-amber-400 space-x-1.5 font-semibold">
                         <Clock className="w-3.5 h-3.5" />
                         <span>{formatTime(run.next_wake_time)}</span>
                       </div>
@@ -147,20 +152,22 @@ export default function RunList({ runs, selectedFilter, onFilterChange }: RunLis
                     )}
                   </td>
 
-                  <td className="py-4 px-5 max-w-xs">
-                    <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed bg-slate-950/40 p-2 rounded-lg border border-slate-800/50">
-                      {run.compact_memory || 'No memory recorded.'}
-                    </p>
-                  </td>
-
                   <td className="py-4 px-5 text-right">
-                    <Link
-                      href={`/runs/${run.id}`}
-                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all"
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectRun) onSelectRun(run.id);
+                      }}
+                      className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        selectedRunId === run.id
+                          ? 'bg-indigo-600 text-white shadow-lg'
+                          : 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30'
+                      }`}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>Inspect</span>
-                    </Link>
+                      <span>{selectedRunId === run.id ? 'Inspecting' : 'Inspect'}</span>
+                    </button>
                   </td>
                 </tr>
               ))

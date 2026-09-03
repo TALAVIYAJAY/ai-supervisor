@@ -31,7 +31,7 @@ export default function FinalSummaryCard({ summary }: FinalSummaryCardProps) {
           <ShieldCheck className="w-4 h-4" />
           <span>Executive Summary</span>
         </span>
-        <p className="text-slate-300">{summary.final_summary}</p>
+        <p className="text-slate-300">{summary.final_summary ? summary.final_summary.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -44,7 +44,7 @@ export default function FinalSummaryCard({ summary }: FinalSummaryCardProps) {
             {summary.important_actions_taken?.map((action, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="text-cyan-400 font-mono text-[10px] mt-0.5">•</span>
-                <span>{action}</span>
+                <span>{action ? action.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</span>
               </li>
             ))}
           </ul>
@@ -59,7 +59,7 @@ export default function FinalSummaryCard({ summary }: FinalSummaryCardProps) {
             {summary.key_learnings?.map((learning, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="text-amber-400 font-mono text-[10px] mt-0.5">•</span>
-                <span>{learning}</span>
+                <span>{learning ? learning.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</span>
               </li>
             ))}
           </ul>
@@ -74,7 +74,7 @@ export default function FinalSummaryCard({ summary }: FinalSummaryCardProps) {
             {summary.recommendations?.map((rec, idx) => (
               <li key={idx} className="flex items-start space-x-2">
                 <span className="text-purple-400 font-mono text-[10px] mt-0.5">•</span>
-                <span>{rec}</span>
+                <span>{rec ? rec.replace(/\*\*/g, '').replace(/\*/g, '') : ''}</span>
               </li>
             ))}
           </ul>
