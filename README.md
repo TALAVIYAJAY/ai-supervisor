@@ -4,6 +4,13 @@ A long-running, autonomous AI Supervisor for e-commerce and order operations pow
 
 ---
 
+## 🎬 Video Walkthrough
+
+A complete end-to-end video walkthrough demonstrating supervisor configuration, order launch, signal ingestion, sleep/wake cycles, tool execution, live operator directives, lifecycle controls, and the final post-mortem report is available in the repository root:
+* **Video File**: [`VIDEO_WALKTHROUGH.mp4`](VIDEO_WALKTHROUGH.mp4)
+
+---
+
 ## Overview
 
 The **Autonomous AI Order Supervisor** oversees the end-to-end lifecycle of an e-commerce order from placement to final fulfillment. Rather than using stateless chatbots or brittle polling scripts, it assigns a dedicated, durable AI supervisor to each order that sleeps efficiently when idle and wakes up autonomously on real-world events or scheduled timers.
